@@ -1,0 +1,355 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Blackjack — Simulation gratuite (avec sons)</title>
+  <style>
+    :root{--bg:#0f1724;--card:#0b1220;--accent:#06b6d4;--muted:#94a3b8;--glass: rgba(255,255,255,0.04)}
+    *{box-sizing:border-box;font-family:Inter,ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,'Helvetica Neue',Arial}
+    html,body{height:100%;margin:0;background:linear-gradient(180deg,#031024 0%, #071227 60%);color:#e6eef6}
+    .app{max-width:1100px;margin:28px auto;padding:24px;border-radius:16px;background:linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0.01));box-shadow: 0 10px 30px rgba(2,6,23,0.6)}
+    header{display:flex;align-items:center;justify-content:space-between;margin-bottom:18px}
+    header h1{font-size:20px;margin:0;letter-spacing:0.6px}
+    .topbar{display:flex;gap:12px;align-items:center}
+    .balance{background:var(--glass);padding:8px 12px;border-radius:10px;font-weight:600}
+
+    .main{display:grid;grid-template-columns:1fr 380px;gap:20px}
+    .table{background:linear-gradient(180deg,#062034 0%, #063045 100%);padding:18px;border-radius:14px;min-height:440px;display:flex;flex-direction:column;align-items:center}
+    .dealer-area,.player-area{width:100%;display:flex;flex-direction:column;align-items:center}
+    .label{color:var(--muted);font-size:13px;margin-bottom:8px}
+    .hand{display:flex;gap:10px;align-items:center;min-height:120px}
+
+    .card{width:100px;height:140px;border-radius:10px;background:linear-gradient(180deg,#fff 0%, #f6f6f6 1%);box-shadow:0 6px 18px rgba(0,0,0,0.45);display:flex;flex-direction:column;justify-content:space-between;padding:10px;color:#101010;font-weight:700;transition:transform .18s ease}
+    .card:hover{transform:translateY(-6px)}
+    .card.back{background:linear-gradient(180deg,#0b2b3a,#063042);color:transparent;position:relative}
+    .card.back:after{content:'';position:absolute;inset:12px;border-radius:8px;background:repeating-linear-gradient(45deg, rgba(255,255,255,0.06), rgba(255,255,255,0.06) 6px, transparent 6px, transparent 12px)}
+    .card.small{width:70px;height:98px;font-size:14px}
+
+    .controls{display:flex;flex-direction:column;gap:10px;padding:12px;background:linear-gradient(180deg, rgba(0,0,0,0.12), rgba(0,0,0,0.06));border-radius:12px}
+    .bet-row{display:flex;gap:8px;align-items:center}
+    input[type=range]{width:100%}
+    .btn{padding:10px 14px;border-radius:10px;border:none;font-weight:700;cursor:pointer}
+    .btn.primary{background:var(--accent);color:#04202a}
+    .btn.ghost{background:transparent;border:1px solid rgba(255,255,255,0.06);color:var(--muted)}
+    .actions{display:flex;gap:8px}
+    footer{margin-top:12px;color:var(--muted);font-size:13px}
+
+    .info{padding:12px;background:rgba(255,255,255,0.02);border-radius:10px;color:var(--muted);font-size:13px}
+    .big{font-size:18px;font-weight:800}
+
+    .sound-controls{display:flex;gap:8px;align-items:center}
+    
+    .credit-footer {
+      position: fixed;
+      bottom: 12px;
+      right: 16px;
+      font-size: 13px;
+      color: var(--muted);
+      opacity: 0.8;
+      z-index: 1000;
+    }
+
+    /* small responsive */
+    @media (max-width:900px){.main{grid-template-columns:1fr;}.card{width:80px;height:120px}}
+  </style>
+</head>
+<body>
+  <div class="app">
+    <header>
+      <h1>Blackjack — Simulation gratuite (avec sons)</h1>
+      <div class="topbar">
+        <div class="balance">Solde: <span id="balance">1000</span> €</div>
+      </div>
+    </header>
+
+    <div class="main">
+      <section class="table">
+        <div class="dealer-area">
+          <div class="label">Croupier</div>
+          <div class="hand" id="dealer-hand"></div>
+          <div class="label" id="dealer-total">Total: ?</div>
+        </div>
+
+        <div style="height:18px"></div>
+
+        <div class="player-area">
+          <div class="label">Joueur</div>
+          <div class="hand" id="player-hand"></div>
+          <div class="label" id="player-total">Total: 0</div>
+        </div>
+
+        <div style="flex:1"></div>
+        <footer>
+          <div>Règles notables: Blackjack (As+10) paie 3:2. "2x" = Double Down — double votre mise, recevez 1 carte et terminez le tour. La carte cachée du croupier (hole card) reste cachée jusqu'à la fin pour la logique du jeu.</div>
+        </footer>
+      </section>
+
+      <aside class="controls">
+        <div class="info"><div class="big">Mise actuelle: <span id="bet-display">10</span> €</div></div>
+
+        <div class="bet-row">
+          <input type="range" id="bet-range" min="1" max="500" value="10" />
+        </div>
+
+        <div style="display:flex;gap:8px;align-items:center;justify-content:space-between">
+          <button id="deal-btn" class="btn primary">Distribuer</button>
+          <div style="display:flex;gap:6px">
+            <button id="hit-btn" class="btn ghost" disabled>Hit</button>
+            <button id="stand-btn" class="btn ghost" disabled>Stand</button>
+            <button id="double-btn" class="btn ghost" disabled>2x (Double)</button>
+          </div>
+        </div>
+
+        <div class="info" id="message">Appuie sur "Distribuer" pour commencer — c'est gratuit (argent factice).</div>
+
+        <div style="display:flex;gap:8px;justify-content:space-between">
+          <button id="reset-btn" class="btn ghost">Réinitialiser solde</button>
+          <button id="newgame-btn" class="btn ghost">Nouveau tour</button>
+        </div>
+
+        <div class="info" style="margin-top:8px">
+          <strong>Contrôles sonores</strong>
+          <div class="sound-controls">
+            <button id="toggle-ambient" class="btn ghost">Activer ambiance</button>
+            <label style="font-size:13px;color:var(--muted);">Volume</label>
+            <input id="volume" type="range" min="0" max="1" step="0.01" value="0.22">
+          </div>
+          <div style="margin-top:8px">Les sons sont générés localement (aucun fichier externe). Bruit d'ambiance doux, sons de carte pour deal/hit/double et petit jingle de victoire/perte.</div>
+        </div>
+
+        <div class="info" style="margin-top:8px">
+          <strong>Explications rapides</strong>
+          <ul>
+            <li>Objectif: battre le croupier sans dépasser 21.</li>
+            <li>Si vous doublez (2x), vous doublez la mise, recevez 1 carte, puis le tour se termine pour vous.</li>
+            <li>Si vous perdez, vous perdez la mise; si vous gagnez, vous recevez la mise + gain 1:1 (sauf blackjack 3:2).</li>
+          </ul>
+        </div>
+      </aside>
+    </div>
+  </div>
+  
+  <div class="credit-footer">Crédit HTML : Foufy_2.0 
+</div>
+
+  <script>
+    // Blackjack simulation — play money only + WebAudio sounds
+    const balanceEl = document.getElementById('balance');
+    const betRange = document.getElementById('bet-range');
+    const betDisplay = document.getElementById('bet-display');
+    const dealBtn = document.getElementById('deal-btn');
+    const hitBtn = document.getElementById('hit-btn');
+    const standBtn = document.getElementById('stand-btn');
+    const doubleBtn = document.getElementById('double-btn');
+    const message = document.getElementById('message');
+    const dealerHandEl = document.getElementById('dealer-hand');
+    const playerHandEl = document.getElementById('player-hand');
+    const dealerTotalEl = document.getElementById('dealer-total');
+    const playerTotalEl = document.getElementById('player-total');
+    const toggleAmbientBtn = document.getElementById('toggle-ambient');
+    const volumeSlider = document.getElementById('volume');
+
+    let balance = 1000;
+    let bet = 10;
+    let deck = [];
+    let playerHand = [];
+    let dealerHand = [];
+    let inRound = false;
+    let doubled = false;
+
+    // WebAudio setup (no external files)
+    const AudioContext = window.AudioContext || window.webkitAudioContext;
+    let audioCtx = null;
+    let masterGain = null;
+    let ambientNode = null;
+    let ambientPlaying = false;
+
+    function ensureAudio(){
+      if(audioCtx) return;
+      audioCtx = new AudioContext();
+      masterGain = audioCtx.createGain();
+      masterGain.gain.value = Number(volumeSlider.value);
+      masterGain.connect(audioCtx.destination);
+    }
+
+    // Ambient: filtered noise loop (soft crowd/room feel)
+    function createAmbient(){
+      if(!audioCtx) return;
+      // create a noise buffer
+      const bufferSize = 2 * audioCtx.sampleRate;
+      const buffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate);
+      const data = buffer.getChannelData(0);
+      for(let i=0;i<bufferSize;i++){ data[i] = (Math.random()*2-1) * 0.35; }
+      const src = audioCtx.createBufferSource();
+      src.buffer = buffer; src.loop = true;
+      // filter to make it warm
+      const low = audioCtx.createBiquadFilter(); low.type='lowpass'; low.frequency.value = 800;
+      const high = audioCtx.createBiquadFilter(); high.type='highpass'; high.frequency.value = 70;
+
+      const ambGain = audioCtx.createGain(); ambGain.gain.value = 0.6;
+
+      src.connect(low); low.connect(high); high.connect(ambGain); ambGain.connect(masterGain);
+      ambientNode = {src, ambGain};
+    }
+
+    function startAmbient(){
+      ensureAudio();
+      if(ambientPlaying) return;
+      createAmbient();
+      ambientNode.src.start();
+      ambientPlaying = true;
+      toggleAmbientBtn.textContent = 'Désactiver ambiance';
+    }
+    function stopAmbient(){
+      if(!ambientPlaying) return;
+      try{ ambientNode.src.stop(); }catch(e){}
+      ambientNode = null; ambientPlaying = false;
+      toggleAmbientBtn.textContent = 'Activer ambiance';
+    }
+
+    // card sound: short filtered noise burst + high-pitched click
+    function playCardSound(){
+      if(!audioCtx) return;
+      const now = audioCtx.currentTime;
+      const noiseBuf = audioCtx.createBuffer(1, audioCtx.sampleRate * 0.05, audioCtx.sampleRate);
+      const data = noiseBuf.getChannelData(0);
+      for(let i=0;i<data.length;i++) data[i] = (Math.random()*2-1) * (1 - i/data.length);
+      const nsrc = audioCtx.createBufferSource(); nsrc.buffer = noiseBuf;
+      const nFilter = audioCtx.createBiquadFilter(); nFilter.type='bandpass'; nFilter.frequency.value = 1200;
+      const ng = audioCtx.createGain(); ng.gain.value = 0.18;
+      nsrc.connect(nFilter); nFilter.connect(ng); ng.connect(masterGain);
+      nsrc.start(now); nsrc.stop(now + 0.06);
+
+      // bright click
+      const osc = audioCtx.createOscillator(); const og = audioCtx.createGain();
+      osc.type = 'triangle'; osc.frequency.setValueAtTime(1500, now);
+      osc.frequency.exponentialRampToValueAtTime(600, now + 0.06);
+      og.gain.setValueAtTime(0.12, now);
+      og.gain.exponentialRampToValueAtTime(0.001, now + 0.07);
+      osc.connect(og); og.connect(masterGain);
+      osc.start(now); osc.stop(now + 0.07);
+    }
+
+    function playDealSound(){ playCardSound(); }
+    function playHitSound(){ playCardSound(); }
+    function playDoubleSound(){
+      if(!audioCtx) return; const now = audioCtx.currentTime;
+      const o = audioCtx.createOscillator(); const g = audioCtx.createGain();
+      o.type='sine'; o.frequency.setValueAtTime(520, now); o.frequency.exponentialRampToValueAtTime(360, now+0.14);
+      g.gain.setValueAtTime(0.16, now); g.gain.exponentialRampToValueAtTime(0.001, now+0.18);
+      o.connect(g); g.connect(masterGain); o.start(now); o.stop(now+0.18);
+    }
+    function playWinSound(){ if(!audioCtx) return; const now = audioCtx.currentTime; const o = audioCtx.createOscillator(); const g = audioCtx.createGain(); o.type='sine'; o.frequency.setValueAtTime(780, now); o.frequency.exponentialRampToValueAtTime(980, now+0.18); g.gain.setValueAtTime(0.08, now); g.gain.exponentialRampToValueAtTime(0.001, now+0.3); o.connect(g); g.connect(masterGain); o.start(now); o.stop(now+0.3); }
+    function playLoseSound(){ if(!audioCtx) return; const now = audioCtx.currentTime; const o = audioCtx.createOscillator(); const g = audioCtx.createGain(); o.type='sawtooth'; o.frequency.setValueAtTime(260, now); o.frequency.exponentialRampToValueAtTime(160, now+0.28); g.gain.setValueAtTime(0.09, now); g.gain.exponentialRampToValueAtTime(0.001, now+0.28); o.connect(g); g.connect(masterGain); o.start(now); o.stop(now+0.28); }
+
+    volumeSlider.addEventListener('input', ()=>{
+      if(masterGain) masterGain.gain.value = Number(volumeSlider.value);
+    });
+    toggleAmbientBtn.addEventListener('click', ()=>{
+      // resume audio on user gesture if needed
+      ensureAudio(); if(audioCtx.state === 'suspended'){ audioCtx.resume(); }
+      ambientPlaying ? stopAmbient() : startAmbient();
+    });
+
+    // --- Blackjack logic (same as before, triggers sound events) ---
+    function updateUI(){
+      balanceEl.textContent = balance;
+      betDisplay.textContent = bet;
+      playerTotalEl.textContent = 'Total: ' + (playerHand.length? handValue(playerHand).best : 0);
+      dealerTotalEl.textContent = inRound ? 'Total: ?' : ('Total: ' + (dealerHand.length? handValue(dealerHand).best : '?'));
+    }
+
+    betRange.addEventListener('input', ()=>{bet = Number(betRange.value); betDisplay.textContent = bet});
+
+    function makeDeck(){
+      const suits = ['♠','♥','♦','♣'];
+      const ranks = ['A','2','3','4','5','6','7','8','9','10','J','Q','K'];
+      const newDeck = [];
+      for(const s of suits) for(const r of ranks){
+        let value = 0;
+        if(r==='A') value = 11;
+        else if(['J','Q','K'].includes(r)) value = 10;
+        else value = Number(r);
+        newDeck.push({rank:r,suit:s,value});
+      }
+      for(let i=newDeck.length-1;i>0;i--){ const j=Math.floor(Math.random()*(i+1));[newDeck[i],newDeck[j]]=[newDeck[j],newDeck[i]]; }
+      return newDeck;
+    }
+
+    function draw(){ if(deck.length===0) deck = makeDeck(); return deck.pop(); }
+
+    function cardHTML(card, faceDown=false){
+      const div = document.createElement('div');
+      div.className = 'card' + (faceDown? ' back' : '');
+      if(faceDown) return div;
+      div.innerHTML = `<div>${card.rank}${card.suit}</div><div style="text-align:right;opacity:0.75">${card.rank}${card.suit}</div>`;
+      return div;
+    }
+
+    function handValue(hand){
+      let total=0; let aces=0;
+      for(const c of hand){ total+=c.value; if(c.rank==='A') aces++; }
+      while(total>21 && aces>0){ total-=10; aces--; }
+      return {best: total, soft: (hand.some(c=>c.rank==='A') && total<=21)};
+    }
+
+    function renderHands(hideDealerHole=true){
+      dealerHandEl.innerHTML=''; playerHandEl.innerHTML='';
+      dealerHand.forEach((c,i)=>{
+        const faceDown = (hideDealerHole && i===1 && inRound);
+        dealerHandEl.appendChild(cardHTML(c, faceDown));
+      });
+      playerHand.forEach(c=> playerHandEl.appendChild(cardHTML(c)));
+    }
+
+    function disableActionButtons(val){ hitBtn.disabled = val; standBtn.disabled = val; doubleBtn.disabled = val; }
+
+    function startRound(){
+      if(inRound){ message.textContent='Un tour est déjà en cours.'; return; }
+      if(bet>balance){ message.textContent='Mise trop élevée pour votre solde.'; return; }
+      deck = deck.length ? deck : makeDeck();
+      playerHand = [draw(), draw()];
+      dealerHand = [draw(), draw()];
+      balance -= bet; inRound = true; doubled = false;
+      message.textContent='Tour en cours — choisissez une action.';
+      renderHands(true); updateUI(); disableActionButtons(false);
+      dealBtn.disabled = true;
+      playDealSound();
+      if(handValue(playerHand).best===21){ endRound(); }
+    }
+
+    function playerHit(){ if(!inRound) return; playerHand.push(draw()); renderHands(true); updateUI(); playHitSound(); const val = handValue(playerHand).best; if(val>21){ message.textContent='Vous avez busté!'; endRound(); }}
+    function playerStand(){ if(!inRound) return; endRound(); }
+    function playerDouble(){ if(!inRound) return; if(balance<bet){ message.textContent='Solde insuffisant pour doubler.'; return; } balance -= bet; bet *= 2; doubled = true; updateUI(); playerHand.push(draw()); renderHands(true); playDoubleSound(); const val = handValue(playerHand).best; if(val>21){ message.textContent='Bust après double!'; endRound(); } else { endRound(); }}
+
+    function dealerPlay(){ while(true){ const v = handValue(dealerHand).best; if(v<17) { dealerHand.push(draw()); playDealSound(); } else break; }}
+
+    function settle(){ const p = handValue(playerHand).best; const d = handValue(dealerHand).best; const isPlayerBJ = (playerHand.length===2 && p===21); const isDealerBJ = (dealerHand.length===2 && d===21);
+      if(p>21){ return {result:'lose',reason:'Bust'}; }
+      if(isPlayerBJ && !isDealerBJ){ const payout = Math.floor(bet * 1.5); balance += bet + payout; return {result:'blackjack', payout}; }
+      if(isDealerBJ && !isPlayerBJ){ return {result:'lose',reason:'Dealer Blackjack'}; }
+      if(d>21){ balance += bet*2; return {result:'win',reason:'Dealer bust'}; }
+      if(p>d){ balance += bet*2; return {result:'win'}; }
+      if(p===d){ balance += bet; return {result:'push'}; }
+      return {result:'lose'};
+    }
+
+    function endRound(){ inRound = false; renderHands(false); disableActionButtons(true); dealBtn.disabled = false; updateUI(); if(!(handValue(playerHand).best>21)) dealerPlay(); renderHands(false); updateUI(); const res = settle(); if(res.result==='blackjack'){ message.textContent = `Blackjack! Vous gagnez 3:2 (gain supplémentaire ${Math.floor(bet*1.5)}€).`; playWinSound(); } else if(res.result==='win'){ message.textContent = 'Vous gagnez!'; playWinSound(); } else if(res.result==='push'){ message.textContent = 'Égalité (push). Votre mise est rendue.'; } else { message.textContent = 'Vous perdez.'; playLoseSound(); } if(doubled){ bet = Math.max(1, Math.floor(bet/2)); betRange.value = bet; betDisplay.textContent = bet; } updateUI(); }
+
+    // wire
+    dealBtn.addEventListener('click', ()=>{ // unlock audio context on user gesture
+      if(!audioCtx){ ensureAudio(); if(audioCtx.state === 'suspended') audioCtx.resume(); }
+      startRound();
+    });
+    hitBtn.addEventListener('click', playerHit);
+    standBtn.addEventListener('click', playerStand);
+    doubleBtn.addEventListener('click', playerDouble);
+    document.getElementById('reset-btn').addEventListener('click', ()=>{ balance=1000; updateUI(); message.textContent='Solde remis à 1000€.'});
+    document.getElementById('newgame-btn').addEventListener('click', ()=>{ if(inRound){ message.textContent='Finissez le tour actuel.'; } else { playerHand=[]; dealerHand=[]; renderHands(false); message.textContent='Prêt pour un nouveau tour.' }});
+
+    // initial
+    updateUI();
+  </script>
+</body>
+</html>
